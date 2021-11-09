@@ -10,9 +10,36 @@
 | 0x20 (APP发送给设备的加密数据)  |  |
 | 0x21 (设备发送给APP的加密数据)  |  |
 ###### 2.1 发现服务和特征
-连接上蓝牙后，SDK执行发现设备服务→发现服务下特征操作。设备为了向下兼容，包含了两个服务：F100和F200。SDK在发现服务的时候需要进行判断，如果发现的服务中包含了F200的服务，则SDK需要执行加密流程。<br> 
+连接上蓝牙后，SDK执行发现设备服务→发现服务下特征操作。其中包含了两个服务：F100和F200。配网SDK在发现服务的时候需要进行判断，如果发现的服务中包含了F200的服务，则SDK需要执行加密流程。<br> 
 非加密service：F100，此服务有两个特征characteristic：写特征F101、读特征F102<br> 
 加密service：F200，此服务有两个特征characteristic：写特征F201、读特征F202
+```Objective-C
+//1、扫描ble蓝牙
+//发现外设回调
+-(void)centralManager:(CBCentralManager *)central didDiscoverPeripheral:(CBPeripheral *)peripheral advertisementData:(NSDictionary<NSString *,id> *)advertisementData RSSI:(NSNumber *)RSSI;
+
+//2、连接外设回调
+//连接成功
+-(void)centralManager:(CBCentralManager *)central didConnectPeripheral:(CBPeripheral *)peripheral;
+
+//连接失败
+-(void)centralManager:(CBCentralManager *)central didFailToConnectPeripheral:(CBPeripheral *)peripheral error:(NSError *)error;
+
+//断开连接
+-(void)centralManager:(CBCentralManager *)central didDisconnectPeripheral:(CBPeripheral *)peripheral error:(NSError *)error;
+
+//3、连接成功后发现去发现服务
+//发现服务回调
+-(void)peripheral:(CBPeripheral *)peripheral didDiscoverServices:(NSError *)error;
+
+//4、发现服务的特征
+//发现特征回调
+-(void)peripheral:(CBPeripheral *)peripheral didDiscoverCharacteristicsForService:(nonnull CBService *)service error:(nullable NSError *)error;
+
+//5、发送数据
+//数据写入成功回调
+-(void)peripheral:(CBPeripheral *)peripheral didWriteValueForCharacteristic:(CBCharacteristic *)characteristic error:(NSError *)error;
+```
 ###### 2.2 ECDH（secp192k1）秘钥协商
 两端均使用ECDH的方式生成秘钥对，在分别拿到对方的公钥时，再跟自己生成的私钥去进行秘钥协商，得到一个24位的协商结果，也就是AES加解密需要用到的加密key。<br> 
 iOS配网SDK通过使用第三方库`GMObjC`完成秘钥协商，具体代码如下：<br> 
