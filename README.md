@@ -37,3 +37,161 @@ self.aesKey = [GMSm2Utils computeECDH:[NSString stringWithFormat:@"04%@",[dataSt
 ```
 ###### 2.3 AES加解密
 `AES加解密通过采用：CBC+nopadding+iv偏移量"00 01 02 03 04 05 06 07 08 09 0A 0B 0C 0D 0E 0F"来进行实现（加密数据必须为16位的倍数，由于采用的是nopadding，故进行补0操作）`<br>
+```Objective-C
+#define IVKEY @"00 01 02 03 04 05 06 07 08 09 0A 0B 0C 0D 0E 0F"
+ 
+ 
+//加密
++ (NSString *)aes128EncryptWithContent:(NSString *)plaintext key:(NSString *)key {
+     
+    NSData *keyData = [[self class] convertHexStrToData:key];
+    Byte *keyByte = (Byte *)[keyData bytes];
+  
+    NSData *ivData = [[self class] convertHexStrToData:IVKEY];
+    Byte *ivByte = (Byte *)[ivData bytes];
+  
+    NSData* data = [plaintext dataUsingEncoding:NSUTF8StringEncoding];
+    NSUInteger dataLength = [data length];
+     
+    int diff = kCCKeySizeAES128 - (dataLength % kCCKeySizeAES128);
+    int newSize = 0;
+     
+    if(diff > 0)
+    {
+        newSize = (int)dataLength + diff;
+    }
+     
+    char dataPtr[newSize];
+    memcpy(dataPtr, [data bytes], [data length]);
+    for(int i = 0; i < diff; i++)
+    {
+        dataPtr[i + dataLength] = 0x00;
+    }
+     
+    size_t bufferSize = newSize + kCCBlockSizeAES128;
+    void *buffer = malloc(bufferSize);
+    memset(buffer, 0, bufferSize);
+     
+    size_t numBytesCrypted = 0;
+     
+    CCCryptorStatus cryptStatus = CCCrypt(kCCEncrypt,
+                                          kCCAlgorithmAES128,
+                                          0x0000, //No padding
+                                          keyByte,
+                                          kCCKeySizeAES192, //由于得到的加密key为24位，故此处需要设置为kCCKeySizeAES192
+                                          ivByte,
+                                          dataPtr,
+                                          sizeof(dataPtr),
+                                          buffer,
+                                          bufferSize,
+                                          &numBytesCrypted);
+     
+    if (cryptStatus == kCCSuccess) {
+        NSData *resultData = [NSData dataWithBytesNoCopy:buffer length:numBytesCrypted];
+        return [[self class] convertDataToHexStr:resultData];
+    }
+    free(buffer);
+    return nil;
+}
+ 
+ 
+//解密
++ (NSString *)aes128DencryptWithContent:(NSString *)ciphertext key:(NSString *)key {
+     
+    NSData *data1 = [[self class] convertHexStrToData:ciphertext];
+    ciphertext = [TCLGTMBase64 stringByEncodingData:data1];
+     
+    NSData *keyData = [[self class] convertHexStrToData:key];
+    Byte *keyByte = (Byte *)[keyData bytes];
+     
+    NSData *ivData = [[self class] convertHexStrToData:IVKEY];
+    Byte *ivByte = (Byte *)[ivData bytes];
+     
+    NSData *data = [TCLGTMBase64 decodeData:[ciphertext dataUsingEncoding:NSUTF8StringEncoding]];
+    NSUInteger dataLength = [data length];
+    size_t bufferSize = dataLength + kCCBlockSizeAES128;
+    void *buffer = malloc(bufferSize);
+     
+    size_t numBytesCrypted = 0;
+    CCCryptorStatus cryptStatus = CCCrypt(kCCDecrypt,
+                                          kCCAlgorithmAES128,
+                                          0x0000, //No padding
+                                          keyByte,
+                                          kCCKeySizeAES192, //由于得到的加密key为24位，故此处需要设置为kCCKeySizeAES192
+                                          ivByte,
+                                          [data bytes],
+                                          dataLength,
+                                          buffer,
+                                          bufferSize,
+                                          &numBytesCrypted);
+    if (cryptStatus == kCCSuccess) {
+        NSData *resultData = [NSData dataWithBytesNoCopy:buffer length:numBytesCrypted];
+        return [[NSString alloc] initWithData:resultData encoding:NSUTF8StringEncoding];
+    }
+    free(buffer);
+    return nil;
+}
+ 
+/**
+ 十六进制字符串转化为data
+  
+ @param str 十六进制字符串
+ @return data
+ */
++ (NSData *)convertHexStrToData:(NSString *)str {
+    if (!str || [str length] == 0) {
+        return nil;
+    }
+     
+    str = [str stringByReplacingOccurrencesOfString:@" " withString:@""];
+     
+    NSMutableData *hexData = [[NSMutableData alloc] initWithCapacity:8];
+    NSRange range;
+    if ([str length] % 2 == 0) {
+        range = NSMakeRange(0, 2);
+    } else {
+        range = NSMakeRange(0, 1);
+    }
+    for (NSInteger i = range.location; i < [str length]; i += 2) {
+        unsigned int anInt;
+        NSString *hexCharStr = [str substringWithRange:range];
+        NSScanner *scanner = [[NSScanner alloc] initWithString:hexCharStr];
+         
+        [scanner scanHexInt:&anInt];
+        NSData *entity = [[NSData alloc] initWithBytes:&anInt length:1];
+        [hexData appendData:entity];
+         
+        range.location += range.length;
+        range.length = 2;
+    }
+ 
+    return hexData;
+}
+ 
+/**
+ data转换为十六进制字符串
+  
+ @param data data数据
+ @return 十进制字符串
+ */
++ (NSString *)convertDataToHexStr:(NSData *)data {
+    if (!data || [data length] == 0) {
+        return @"";
+    }
+    NSMutableString *string = [[NSMutableString alloc] initWithCapacity:[data length]];
+     
+    [data enumerateByteRangesUsingBlock:^(const void *bytes, NSRange byteRange, BOOL *stop) {
+        unsigned char *dataBytes = (unsigned char*)bytes;
+        for (NSInteger i = 0; i < byteRange.length; i++) {
+            NSString *hexStr = [NSString stringWithFormat:@"%x", (dataBytes[i]) & 0xff];
+            if ([hexStr length] == 2) {
+                [string appendString:hexStr];
+            } else {
+                [string appendFormat:@"0%@", hexStr];
+            }
+        }
+    }];
+     
+    return string;
+}
+```
