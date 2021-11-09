@@ -1,7 +1,7 @@
 # iOS ble蓝牙加密传输
-1.流程图
+#### 1、流程图
 ![图片](https://user-images.githubusercontent.com/20941758/140888056-571f6c99-c020-4c54-973a-0a3bb27394fe.png)
-2.流程
+#### 2、流程
 `为了区分数据是密钥交换还是解密数据，在数据前增加数据类型和长度；`<br>
 |         类型（一个字符）  | 长度（2个字符）  | 数据内容
 |   ----  | ----  |----  |
@@ -9,7 +9,7 @@
 | 0x11 (设备发送自己的公钥给APP)  |  |
 | 0x20 (APP发送给设备的加密数据)  |  |
 | 0x21 (设备发送给APP的加密数据)  |  |
-    2.1 发现服务和特征
+##### 2.1 发现服务和特征
 连接上蓝牙后，SDK执行发现设备服务→发现服务下特征操作。其中包含了两个服务：F100和F200。配网SDK在发现服务的时候需要进行判断，如果发现的服务中包含了F200的服务，则SDK需要执行加密流程。<br> 
 非加密service：F100，此服务有两个特征characteristic：写特征F101、读特征F102<br> 
 加密service：F200，此服务有两个特征characteristic：写特征F201、读特征F202
@@ -40,7 +40,7 @@
 //数据写入成功回调
 -(void)peripheral:(CBPeripheral *)peripheral didWriteValueForCharacteristic:(CBCharacteristic *)characteristic error:(NSError *)error;
 ```
-    2.2 ECDH（secp192k1）秘钥协商
+##### 2.2 ECDH（secp192k1）秘钥协商
 两端均使用ECDH的方式生成秘钥对，在分别拿到对方的公钥时，再跟自己生成的私钥去进行秘钥协商，得到一个24位的协商结果，也就是AES加解密需要用到的加密key。<br> 
 iOS配网SDK通过使用第三方库`GMObjC`完成秘钥协商，具体代码如下：<br> 
 `使用GMObjC库生成的公钥在前面补04为49位，私钥在前面补了0000000000000000为32位，故在发送客户端公钥给设备时需要去掉补的04，拿到设备发过来的公钥时需要补上04再进行秘钥协商`<br> 
@@ -64,7 +64,7 @@ NSString *resultPublicKey = [NSString stringWithFormat:@"100030%@",[self.clientP
 //拿到设备发送过来的公钥后，再结合SDK自己生成的私钥进行秘钥协商，得到加密Key
 self.aesKey = [GMSm2Utils computeECDH:[NSString stringWithFormat:@"04%@",[dataStr substringFromIndex:6]] privateKey:self.clientPrivateKey];
 ```
-    2.3 AES加解密
+##### 2.3 AES加解密
 `AES加解密通过采用：CBC+nopadding+iv偏移量"00 01 02 03 04 05 06 07 08 09 0A 0B 0C 0D 0E 0F"来进行实现（加密数据必须为16位的倍数，由于采用的是nopadding，故进行补0操作）`<br>
 ```Objective-C
 #define IVKEY @"00 01 02 03 04 05 06 07 08 09 0A 0B 0C 0D 0E 0F"
